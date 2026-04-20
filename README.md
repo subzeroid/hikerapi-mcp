@@ -8,6 +8,12 @@ MCP server for [HikerAPI](https://hikerapi.com) — Instagram data API. Availabl
 
 Auto-generates MCP tools from the HikerAPI OpenAPI spec at startup, so every non-deprecated `GET` endpoint is exposed without hand-written wrappers. HikerAPI only exposes read (`GET`) endpoints — the server maps each one 1:1 to an MCP tool (`GET /v2/user/by/username` → `get_v2_user_by_username`).
 
+## Get 100 Free API Requests
+
+**[Sign up with this link](https://hikerapi.com/p/hsazcgym)** and get **100 free HikerAPI requests** — no credit card required. Enough to wire up the MCP server, try a few prompts in Claude/Cursor/Codex, and evaluate the data quality before committing.
+
+> **[Get your free 100 requests here](https://hikerapi.com/p/hsazcgym)**
+
 ## Quick start
 
 1. Get an API key at [hikerapi.com/tokens](https://hikerapi.com/tokens).
