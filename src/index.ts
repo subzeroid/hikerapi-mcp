@@ -88,7 +88,7 @@ async function main(): Promise<void> {
   );
 
   const server = new Server(
-    { name: "hikerapi-mcp", version: "1.0.1" },
+    { name: "hikerapi-mcp", version: "1.0.2" },
     { capabilities: { tools: {} } },
   );
 

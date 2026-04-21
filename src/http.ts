@@ -20,9 +20,14 @@ export async function fetchWithLimit(
   timeoutMs: number,
 ): Promise<FetchResult> {
   const signal = AbortSignal.timeout(timeoutMs);
+  // Disable connection reuse: some upstream HTTP servers close keep-alive
+  // sockets aggressively and undici's pool reuses a dead socket on the next
+  // request, hanging until the AbortSignal fires.
+  const headers = new Headers(init.headers);
+  headers.set("connection", "close");
   let resp: Response;
   try {
-    resp = await fetch(url, { ...init, signal });
+    resp = await fetch(url, { ...init, signal, headers });
   } catch (err) {
     if (isAbortError(err)) {
       throw new FetchError(`Request timed out after ${timeoutMs}ms`, "timeout");

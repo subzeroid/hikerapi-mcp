@@ -1,6 +1,6 @@
 {
   "name": "hikerapi-mcp",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "MCP server for HikerAPI — Instagram data API. Auto-generates tools from the HikerAPI OpenAPI spec.",
   "type": "module",
   "main": "dist/index.js",
