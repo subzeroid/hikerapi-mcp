@@ -14,7 +14,8 @@
     "build": "tsc && node -e \"try{require('fs').chmodSync('dist/index.js',0o755)}catch(e){}\"",
     "start": "node dist/index.js",
     "dev": "tsx src/index.ts",
-    "test": "node --import tsx --test test/*.test.ts",
+    "test": "node --import tsx --test test/openapi.test.ts test/smoke.test.ts",
+    "test:e2e": "node --import tsx --test test/e2e.test.ts",
     "prepublishOnly": "npm run build"
   },
   "keywords": [
