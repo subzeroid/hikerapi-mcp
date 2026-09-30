@@ -49,7 +49,21 @@ export interface ToolEntry {
 export interface BuildOptions {
   includeTags?: string[];
   excludeTags?: Set<string>;
+  /** When set, only these OpenAPI paths become tools. */
+  onlyPaths?: ReadonlySet<string>;
+  /** Hand-written descriptions keyed by path; they replace the spec's summary. */
+  descriptions?: Record<string, string>;
 }
+
+/**
+ * Every tool is a GET against the upstream API: it changes nothing, and it
+ * reaches out to a live third-party platform rather than a closed dataset.
+ */
+export const TOOL_ANNOTATIONS: NonNullable<Tool["annotations"]> = {
+  readOnlyHint: true,
+  destructiveHint: false,
+  openWorldHint: true,
+};
 
 const HTTP_METHODS = new Set(["get", "post", "put", "patch", "delete", "options", "head"]);
 
@@ -178,6 +192,7 @@ export function buildTools(spec: OpenApiSpec, opts: BuildOptions = {}): ToolEntr
       if (!raw || typeof raw !== "object") continue;
       const op = raw as Operation;
       if (!shouldIncludeOperation(op, includeTags, excludeTags)) continue;
+      if (opts.onlyPaths && !opts.onlyPaths.has(path)) continue;
 
       let name = sanitizeName(method, path);
       if (usedNames.has(name)) {
@@ -191,16 +206,18 @@ export function buildTools(spec: OpenApiSpec, opts: BuildOptions = {}): ToolEntr
         (p) => p.in === "query" || p.in === "path",
       );
 
-      const description = [op.summary, op.description]
-        .filter(Boolean)
-        .join("\n\n")
-        .slice(0, 1024) || `${method.toUpperCase()} ${path}`;
+      // The endpoint goes last: an agent picks a tool from the first words of
+      // its description, so the purpose has to lead.
+      const endpoint = `(${method.toUpperCase()} ${path})`;
+      const generated = [op.summary, op.description].filter(Boolean).join("\n\n").slice(0, 1024);
+      const text = opts.descriptions?.[path] ?? generated;
 
       entries.push({
         tool: {
           name,
-          description: `[${method.toUpperCase()} ${path}] ${description}`,
+          description: text ? `${text} ${endpoint}` : endpoint,
           inputSchema: buildInputSchema(parameters, spec),
+          annotations: TOOL_ANNOTATIONS,
         },
         method,
         path,

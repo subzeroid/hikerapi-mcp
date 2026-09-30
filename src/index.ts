@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+import { createRequire } from "node:module";
+
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
@@ -15,6 +17,16 @@ import {
   type ToolEntry,
 } from "./openapi.js";
 import { fetchWithLimit, FetchError } from "./http.js";
+import { CORE_PATHS, CORE_TOOLS } from "./curated.js";
+
+// package.json sits next to dist/ in the published package and next to src/
+// in a checkout, so the same relative path works for both.
+const { version: VERSION } = createRequire(import.meta.url)("../package.json") as {
+  version: string;
+};
+// Identifies the package in HikerAPI's request logs; without it the calls are
+// indistinguishable from any other Node.js client.
+const USER_AGENT = `hikerapi-mcp/${VERSION}`;
 
 const API_KEY = process.env.HIKERAPI_KEY;
 const BASE_URL = (process.env.HIKERAPI_URL ?? "https://api.hikerapi.com").replace(/\/$/, "");
@@ -31,6 +43,8 @@ const excludeTags = new Set([
   ...DEFAULT_EXCLUDED_TAGS,
   ...parseTagList(process.env.HIKERAPI_EXCLUDE_TAGS),
 ]);
+// "core" (default): one curated tool per task. "all": every non-deprecated GET.
+const ALL_TOOLS = (process.env.HIKERAPI_TOOLS ?? "core").trim().toLowerCase() === "all";
 
 if (!API_KEY) {
   process.stderr.write(
@@ -66,7 +80,7 @@ async function loadSpec(): Promise<OpenApiSpec> {
   process.stderr.write(`Fetching OpenAPI spec from ${SPEC_URL}...\n`);
   const result = await fetchWithLimit(
     SPEC_URL,
-    { method: "GET", headers: { accept: "application/json" } },
+    { method: "GET", headers: { accept: "application/json", "user-agent": USER_AGENT } },
     MAX_SPEC_BYTES,
     SPEC_TIMEOUT_MS,
   );
@@ -78,17 +92,23 @@ async function loadSpec(): Promise<OpenApiSpec> {
 
 async function main(): Promise<void> {
   const spec = await loadSpec();
-  const entries = buildTools(spec, { includeTags, excludeTags });
+  const entries = buildTools(spec, {
+    includeTags,
+    excludeTags,
+    descriptions: CORE_TOOLS,
+    onlyPaths: ALL_TOOLS ? undefined : CORE_PATHS,
+  });
   const byName = new Map<string, ToolEntry>(entries.map((e) => [e.tool.name, e] as const));
 
   process.stderr.write(
     `Loaded ${entries.length} HikerAPI tools` +
+      (ALL_TOOLS ? " (all endpoints)" : " (core set; HIKERAPI_TOOLS=all exposes every endpoint)") +
       (includeTags.length ? ` (tags: ${includeTags.join(", ")})` : "") +
       `\n`,
   );
 
   const server = new Server(
-    { name: "hikerapi-mcp", version: "1.0.2" },
+    { name: "hikerapi-mcp", version: VERSION },
     { capabilities: { tools: {} } },
   );
 
@@ -116,6 +136,7 @@ async function main(): Promise<void> {
           headers: {
             "x-access-key": API_KEY!,
             accept: "application/json",
+            "user-agent": USER_AGENT,
           },
         },
         MAX_RESPONSE_BYTES,

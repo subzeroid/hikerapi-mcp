@@ -9,6 +9,7 @@ import {
   resolveParameter,
   sanitizeName,
   shouldIncludeOperation,
+  TOOL_ANNOTATIONS,
   type OpenApiSpec,
 } from "../src/openapi.ts";
 
@@ -218,7 +219,43 @@ describe("buildTools", () => {
       excludeTags: new Set(["Legacy"]),
     });
     assert.ok(tools.length > 0);
-    assert.ok(tools.every((t) => t.tool.description.startsWith("[GET ")));
+    assert.ok(tools.every((t) => /\(GET \/[^)]*\)$/.test(t.tool.description ?? "")));
+  });
+
+  it("puts the purpose first and the endpoint last", () => {
+    const tools = buildTools(spec, { excludeTags: new Set(["Legacy"]) });
+    const user = tools.find((t) => t.tool.name === "get_v2_user_by_username")!;
+    assert.equal(user.tool.description, "Get user by username (GET /v2/user/by/username)");
+  });
+
+  it("marks every tool read-only and open-world", () => {
+    const tools = buildTools(spec, { excludeTags: new Set(["Legacy"]) });
+    for (const t of tools) {
+      assert.deepEqual(t.tool.annotations, TOOL_ANNOTATIONS);
+    }
+    assert.equal(TOOL_ANNOTATIONS.readOnlyHint, true);
+    assert.equal(TOOL_ANNOTATIONS.destructiveHint, false);
+    assert.equal(TOOL_ANNOTATIONS.openWorldHint, true);
+  });
+
+  it("limits the tool set to onlyPaths when given", () => {
+    const tools = buildTools(spec, {
+      excludeTags: new Set(["Legacy"]),
+      onlyPaths: new Set(["/v2/user/by/username", "/v1/legacy", "/v1/bad"]),
+    });
+    // Legacy and deprecated endpoints stay out even if listed.
+    assert.deepEqual(tools.map((t) => t.tool.name), ["get_v2_user_by_username"]);
+  });
+
+  it("prefers a hand-written description over the spec summary", () => {
+    const tools = buildTools(spec, {
+      excludeTags: new Set(["Legacy"]),
+      descriptions: { "/v2/user/by/username": "Curated text." },
+    });
+    const user = tools.find((t) => t.tool.name === "get_v2_user_by_username")!;
+    assert.equal(user.tool.description, "Curated text. (GET /v2/user/by/username)");
+    const shared = tools.find((t) => t.tool.name === "get_v2_shared_id")!;
+    assert.equal(shared.tool.description, "Shared path param endpoint (GET /v2/shared/{id})");
   });
 });
 

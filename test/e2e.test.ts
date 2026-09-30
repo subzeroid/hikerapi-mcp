@@ -36,8 +36,8 @@ describe(
         tools: Array<{ name: string }>;
       };
       assert.ok(
-        res.tools.length >= 50,
-        `expected >= 50 tools, got ${res.tools.length}`,
+        res.tools.length >= 30,
+        `expected >= 30 tools, got ${res.tools.length}`,
       );
       assert.ok(
         res.tools.some((t) => t.name === "get_v2_user_by_username"),
