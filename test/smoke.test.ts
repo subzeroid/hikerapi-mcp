@@ -29,6 +29,9 @@ const SPEC = {
         ],
       },
     },
+    "/v1/user/by/username": {
+      get: { summary: "Older variant", tags: ["User Profile"] },
+    },
     "/v1/legacy": {
       get: { summary: "old", tags: ["Legacy"] },
     },
@@ -102,7 +105,13 @@ describe("hikerapi-mcp server (smoke)", () => {
       assert.equal((init as { serverInfo: { name: string } }).serverInfo.name, "hikerapi-mcp");
       client.notify("notifications/initialized", {});
 
-      const list = (await client.request("tools/list", {})) as { tools: Array<{ name: string }> };
+      const list = (await client.request("tools/list", {})) as {
+        tools: Array<{
+          name: string;
+          description: string;
+          annotations?: { readOnlyHint?: boolean; openWorldHint?: boolean };
+        }>;
+      };
       const names = list.tools.map((t) => t.name);
       assert.ok(
         names.includes("get_v2_user_by_username"),
@@ -110,6 +119,16 @@ describe("hikerapi-mcp server (smoke)", () => {
       );
       assert.ok(!names.includes("get_v1_legacy"), "Legacy tag should be excluded by default");
       assert.ok(!names.includes("get_v1_system"), "System tag should be excluded by default");
+      assert.ok(
+        !names.includes("get_v1_user_by_username"),
+        "endpoints outside the core set should be hidden by default",
+      );
+
+      const user = list.tools.find((t) => t.name === "get_v2_user_by_username")!;
+      assert.match(user.description, /^Get an Instagram profile by username/);
+      assert.match(user.description, /\(GET \/v2\/user\/by\/username\)$/);
+      assert.equal(user.annotations?.readOnlyHint, true);
+      assert.equal(user.annotations?.openWorldHint, true);
 
       const result = (await client.request("tools/call", {
         name: "get_v2_user_by_username",
@@ -121,6 +140,41 @@ describe("hikerapi-mcp server (smoke)", () => {
       assert.equal(payload.ok, true);
       assert.equal(payload.key, "test-key");
       assert.equal(payload.path, "/v2/user/by/username?username=instagram");
+
+      const apiCall = calls.findLast((c) => c.url.startsWith("/v2/user/by/username"))!;
+      assert.match(String(apiCall.headers["user-agent"]), /^hikerapi-mcp\/\d+\.\d+\.\d+/);
+      const specCall = calls.findLast((c) => c.url === "/openapi.json")!;
+      assert.match(String(specCall.headers["user-agent"]), /^hikerapi-mcp\//);
+    } finally {
+      await client.close();
+    }
+  });
+
+  it("exposes every endpoint with HIKERAPI_TOOLS=all", async () => {
+    const client = await spawnServer({
+      HIKERAPI_KEY: "test-key",
+      HIKERAPI_URL: baseUrl,
+      HIKERAPI_TOOLS: "all",
+    });
+
+    try {
+      await client.request("initialize", {
+        protocolVersion: "2024-11-05",
+        capabilities: {},
+        clientInfo: { name: "smoke", version: "0" },
+      });
+      client.notify("notifications/initialized", {});
+
+      const list = (await client.request("tools/list", {})) as {
+        tools: Array<{ name: string; description: string }>;
+      };
+      const names = list.tools.map((t) => t.name);
+      assert.ok(names.includes("get_v2_user_by_username"));
+      assert.ok(names.includes("get_v1_user_by_username"), "all mode should expose non-core endpoints");
+      assert.ok(!names.includes("get_v1_legacy"), "Legacy stays excluded in all mode");
+
+      const older = list.tools.find((t) => t.name === "get_v1_user_by_username")!;
+      assert.equal(older.description, "Older variant (GET /v1/user/by/username)");
     } finally {
       await client.close();
     }

@@ -6,7 +6,7 @@
 
 MCP server for [HikerAPI](https://hikerapi.com) — Instagram data API. Available on npm: [`hikerapi-mcp`](https://www.npmjs.com/package/hikerapi-mcp).
 
-Auto-generates MCP tools from the HikerAPI OpenAPI spec at startup, so every non-deprecated `GET` endpoint is exposed without hand-written wrappers. HikerAPI only exposes read (`GET`) endpoints — the server maps each one 1:1 to an MCP tool (`GET /v2/user/by/username` → `get_v2_user_by_username`).
+Generates MCP tools from the HikerAPI OpenAPI spec at startup. HikerAPI only exposes read (`GET`) endpoints — each tool maps 1:1 to one of them (`GET /v2/user/by/username` → `get_v2_user_by_username`). By default you get a **core set of ~45 tools**, one per task, each with a description that tells the assistant when to use it; `HIKERAPI_TOOLS=all` exposes every non-deprecated endpoint (100+).
 
 ## Get 100 Free API Requests
 
@@ -84,19 +84,23 @@ HIKERAPI_KEY = "your-api-key"
 
 ## Tools
 
-Tools are generated at startup from the live [HikerAPI OpenAPI spec](https://api.hikerapi.com/openapi.json), so the list always matches the current API. Roughly **100+ tools** across these groups (sizes as of this writing):
+Tools are generated at startup from the live [HikerAPI OpenAPI spec](https://api.hikerapi.com/openapi.json).
 
-| Group          | Tools | Examples                                                         |
-| -------------- | ----- | ---------------------------------------------------------------- |
-| User Profile   | 36    | `get_v2_user_by_username`, `get_v2_user_by_id`, `get_v1_user_medias` |
-| Post Details   | 20    | `get_v2_media_info_by_code`, `get_v2_media_comments`, `get_v2_media_likers` |
-| Search         | 13    | `get_v1_search_users`, `get_v1_search_hashtags`                  |
-| Hashtags       | 7     | `get_v2_hashtag_medias_top`, `get_v2_hashtag_medias_recent`      |
-| Stories        | 7     | `get_v2_story_by_url`, `get_v1_story_by_id`                      |
-| Location       | 7     | `get_v1_location_medias_recent`, `get_v1_location_search`        |
-| Audio, Share, Highlights, Comments | ~10 | `get_v2_track_by_id`, `get_v1_share_by_url`, …     |
+HikerAPI has 100+ `GET` endpoints, and most of them are version variants of the same call (`v1` / `v2` / `gql` / `g2`). Handing all of them to an assistant makes it pick the wrong one, so the default **core set** keeps one endpoint per task:
 
-Each tool name mirrors its endpoint (`GET /v2/user/by/username` → `get_v2_user_by_username`). Your assistant can call `tools/list` over MCP to get the full, up-to-date list with parameter schemas. `Legacy` and `System` groups are excluded by default.
+| Group                    | Tools | Examples                                                                         |
+| ------------------------ | ----- | -------------------------------------------------------------------------------- |
+| Profiles                 | 16    | `get_v2_user_by_username`, `get_gql_user_medias`, `get_g2_user_followers`        |
+| Posts, comments, likers  | 8     | `get_v2_media_info_by_url`, `get_v2_media_comments`, `get_v2_media_likers`       |
+| Search                   | 7     | `get_v2_fbsearch_accounts`, `get_v2_fbsearch_reels`, `get_v1_search_hashtags`    |
+| Hashtags                 | 4     | `get_v2_hashtag_medias_top`, `get_v2_hashtag_medias_recent`                      |
+| Locations                | 3     | `get_g2_location_by_id`, `get_v1_location_medias_recent_chunk`                   |
+| Stories, highlights, links | 5   | `get_v2_story_by_url`, `get_v2_highlight_by_id`, `get_v1_share_by_url`           |
+| Audio                    | 1     | `get_v2_track_by_id`                                                             |
+
+Core tools carry hand-written descriptions (what the tool does, when to prefer a sibling, pagination, billing) and every tool is annotated read-only. The list lives in [`src/curated.ts`](src/curated.ts).
+
+Set `HIKERAPI_TOOLS=all` to expose every non-deprecated endpoint instead — same tool names as before, so existing prompts keep working. Tool names mirror their endpoint (`GET /v2/user/by/username` → `get_v2_user_by_username`); call `tools/list` over MCP for the current list with parameter schemas. `Legacy` and `System` groups are excluded in both modes.
 
 ## Configuration
 
@@ -105,6 +109,7 @@ Each tool name mirrors its endpoint (`GET /v2/user/by/username` → `get_v2_user
 | `HIKERAPI_KEY`                | Your HikerAPI access key (sent as `x-access-key` header)                               | yes      |
 | `HIKERAPI_URL`                | Base URL. Default: `https://api.hikerapi.com` (alias `https://api.instagrapi.com`)     | no       |
 | `HIKERAPI_SPEC_URL`           | OpenAPI spec URL. Default: `${HIKERAPI_URL}/openapi.json`                              | no       |
+| `HIKERAPI_TOOLS`              | `core` (default): curated set, one tool per task. `all`: every non-deprecated endpoint | no       |
 | `HIKERAPI_TAGS`               | Whitelist: only include operations with these tags (comma-separated)                   | no       |
 | `HIKERAPI_EXCLUDE_TAGS`       | Blacklist: additional tags to exclude (on top of default `Legacy`,`System`)            | no       |
 | `HIKERAPI_TIMEOUT_MS`         | Per-request timeout for API calls. Default: `30000`                                    | no       |
@@ -116,11 +121,14 @@ Each tool name mirrors its endpoint (`GET /v2/user/by/username` → `get_v2_user
 
 If `HIKERAPI_URL` points to a host other than `api.hikerapi.com` or `api.instagrapi.com`, the server prints a warning on startup — your key will be sent there, so only use it for a self-hosted or proxied HikerAPI.
 
-Example — expose only the most common groups:
+Requests are sent with `User-Agent: hikerapi-mcp/<version>`.
+
+Example — expose every endpoint of the most common groups:
 
 ```json
 "env": {
   "HIKERAPI_KEY": "...",
+  "HIKERAPI_TOOLS": "all",
   "HIKERAPI_TAGS": "User Profile,Post Details,Search,Hashtags,Stories"
 }
 ```
@@ -132,6 +140,7 @@ AI Assistant ←stdio→ hikerapi-mcp ──https──> api.hikerapi.com
                           │
                           └─ fetches /openapi.json once on startup,
                              builds one MCP tool per GET endpoint
+                             (core set by default)
 ```
 
 Tool arguments map to the endpoint's `query` and `path` parameters. The response body is returned as-is (JSON text). Non-2xx responses are surfaced as tool errors with the HTTP status and body.
