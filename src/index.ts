@@ -36,6 +36,8 @@ const SPEC_TIMEOUT_MS = numEnv("HIKERAPI_SPEC_TIMEOUT_MS", 60_000);
 const API_TIMEOUT_MS = numEnv("HIKERAPI_TIMEOUT_MS", 30_000);
 const MAX_SPEC_BYTES = numEnv("HIKERAPI_MAX_SPEC_BYTES", 8 * 1024 * 1024);
 const MAX_RESPONSE_BYTES = numEnv("HIKERAPI_MAX_RESPONSE_BYTES", 10 * 1024 * 1024);
+const SPEC_ATTEMPTS = 3;
+const SPEC_RETRY_DELAY_MS = numEnv("HIKERAPI_SPEC_RETRY_DELAY_MS", 2_000);
 
 const DEFAULT_EXCLUDED_TAGS = ["Legacy", "System"];
 const includeTags = parseTagList(process.env.HIKERAPI_TAGS);
@@ -76,8 +78,7 @@ function numEnv(name: string, fallback: number): number {
   return Number.isFinite(n) && n > 0 ? n : fallback;
 }
 
-async function loadSpec(): Promise<OpenApiSpec> {
-  process.stderr.write(`Fetching OpenAPI spec from ${SPEC_URL}...\n`);
+async function fetchSpec(): Promise<OpenApiSpec> {
   const result = await fetchWithLimit(
     SPEC_URL,
     { method: "GET", headers: { accept: "application/json", "user-agent": USER_AGENT } },
@@ -88,6 +89,25 @@ async function loadSpec(): Promise<OpenApiSpec> {
     throw new Error(`Failed to fetch OpenAPI spec: ${result.status} ${result.statusText}`);
   }
   return JSON.parse(result.text) as OpenApiSpec;
+}
+
+// Without the spec the server cannot start at all, so a single transient
+// failure (a 5xx, a dropped connection, a one-off 401 from the edge) would
+// take the whole MCP server down for that session. Retry a few times first.
+async function loadSpec(): Promise<OpenApiSpec> {
+  process.stderr.write(`Fetching OpenAPI spec from ${SPEC_URL}...\n`);
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await fetchSpec();
+    } catch (err) {
+      if (attempt >= SPEC_ATTEMPTS) throw err;
+      const message = err instanceof Error ? err.message : String(err);
+      process.stderr.write(
+        `Spec fetch attempt ${attempt}/${SPEC_ATTEMPTS} failed (${message}), retrying...\n`,
+      );
+      await new Promise((resolve) => setTimeout(resolve, SPEC_RETRY_DELAY_MS * attempt));
+    }
+  }
 }
 
 async function main(): Promise<void> {
