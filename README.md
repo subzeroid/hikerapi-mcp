@@ -114,6 +114,7 @@ Set `HIKERAPI_TOOLS=all` to expose every non-deprecated endpoint instead — sam
 | `HIKERAPI_EXCLUDE_TAGS`       | Blacklist: additional tags to exclude (on top of default `Legacy`,`System`)            | no       |
 | `HIKERAPI_TIMEOUT_MS`         | Per-request timeout for API calls. Default: `30000`                                    | no       |
 | `HIKERAPI_SPEC_TIMEOUT_MS`    | Timeout for the startup spec fetch. Default: `60000`                                   | no       |
+| `HIKERAPI_SPEC_RETRY_DELAY_MS` | Base delay between the 3 startup spec fetch attempts. Default: `2000`                | no       |
 | `HIKERAPI_MAX_RESPONSE_BYTES` | Max bytes read from each API response. Default: `10485760` (10 MB)                     | no       |
 | `HIKERAPI_MAX_SPEC_BYTES`     | Max bytes read from the OpenAPI spec. Default: `8388608` (8 MB)                        | no       |
 

@@ -1,0 +1,43 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.subzeroid/hikerapi-mcp",
+  "title": "HikerAPI",
+  "description": "Instagram data via HikerAPI: profiles, posts, reels, stories, comments, hashtags, locations.",
+  "version": "1.1.2",
+  "repository": {
+    "url": "https://github.com/subzeroid/hikerapi-mcp",
+    "source": "github"
+  },
+  "packages": [
+    {
+      "registryType": "npm",
+      "registryBaseUrl": "https://registry.npmjs.org",
+      "identifier": "hikerapi-mcp",
+      "version": "1.1.2",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "HIKERAPI_KEY",
+          "description": "HikerAPI access key — get one at https://hikerapi.com (100 free requests on signup)",
+          "isRequired": true,
+          "isSecret": true,
+          "format": "string"
+        },
+        {
+          "name": "HIKERAPI_TOOLS",
+          "description": "core (default): 44 curated tools, one per task. all: every endpoint (100+).",
+          "isRequired": false,
+          "isSecret": false,
+          "format": "string",
+          "default": "core",
+          "choices": [
+            "core",
+            "all"
+          ]
+        }
+      ]
+    }
+  ]
+}

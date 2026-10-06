@@ -54,6 +54,8 @@ interface MockRouteFn {
 let mockServer: Server;
 let baseUrl = "";
 const calls: HttpCall[] = [];
+// Number of upcoming /openapi.json requests to fail with 401 before serving it.
+let specFailuresLeft = 0;
 let apiHandler: MockRouteFn = (req, res) => {
   res.statusCode = 404;
   res.end("no handler");
@@ -65,6 +67,12 @@ before(async () => {
     calls.push({ method: req.method ?? "", url: path, headers: { ...req.headers } });
 
     if (path === "/openapi.json") {
+      if (specFailuresLeft > 0) {
+        specFailuresLeft--;
+        res.statusCode = 401;
+        res.end("Unauthorized");
+        return;
+      }
       res.setHeader("content-type", "application/json");
       res.end(JSON.stringify(SPEC));
       return;
@@ -146,6 +154,34 @@ describe("hikerapi-mcp server (smoke)", () => {
       const specCall = calls.findLast((c) => c.url === "/openapi.json")!;
       assert.match(String(specCall.headers["user-agent"]), /^hikerapi-mcp\//);
     } finally {
+      await client.close();
+    }
+  });
+
+  it("retries the spec fetch after a transient failure", async () => {
+    specFailuresLeft = 1;
+    const specCallsBefore = calls.filter((c) => c.url === "/openapi.json").length;
+
+    const client = await spawnServer({
+      HIKERAPI_KEY: "test-key",
+      HIKERAPI_URL: baseUrl,
+      HIKERAPI_SPEC_RETRY_DELAY_MS: "50",
+    });
+
+    try {
+      await client.request("initialize", {
+        protocolVersion: "2024-11-05",
+        capabilities: {},
+        clientInfo: { name: "smoke", version: "0" },
+      });
+      client.notify("notifications/initialized", {});
+
+      const list = (await client.request("tools/list", {})) as { tools: Array<{ name: string }> };
+      assert.ok(list.tools.some((t) => t.name === "get_v2_user_by_username"));
+      const specCalls = calls.filter((c) => c.url === "/openapi.json").length - specCallsBefore;
+      assert.equal(specCalls, 2, "expected one failed and one successful spec fetch");
+    } finally {
+      specFailuresLeft = 0;
       await client.close();
     }
   });

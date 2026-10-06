@@ -1,6 +1,7 @@
 {
   "name": "hikerapi-mcp",
-  "version": "1.1.0",
+  "version": "1.1.2",
+  "mcpName": "io.github.subzeroid/hikerapi-mcp",
   "description": "MCP server for HikerAPI — Instagram data API. Auto-generates tools from the HikerAPI OpenAPI spec.",
   "type": "module",
   "main": "dist/index.js",
@@ -14,7 +15,7 @@
     "build": "tsc && node -e \"try{require('fs').chmodSync('dist/index.js',0o755)}catch(e){}\"",
     "start": "node dist/index.js",
     "dev": "tsx src/index.ts",
-    "test": "node --import tsx --test test/openapi.test.ts test/curated.test.ts test/smoke.test.ts",
+    "test": "node --import tsx --test test/openapi.test.ts test/curated.test.ts test/metadata.test.ts test/smoke.test.ts",
     "test:e2e": "node --import tsx --test test/e2e.test.ts",
     "prepublishOnly": "npm run build"
   },
